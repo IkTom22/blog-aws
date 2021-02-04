@@ -2,6 +2,7 @@ import React from 'react';
 import DisplayPosts from './components/DisplayPosts';
 import './App.css';
 import CreatePost from './components/CreatePost';
+import { withAuthenticator} from 'aws-amplify-react';
 
 function App() {
   return (
@@ -11,4 +12,5 @@ function App() {
     </div>
   );
 }
-export default App;
+export default withAuthenticator(App, 
+  {includeGreetings: true} );

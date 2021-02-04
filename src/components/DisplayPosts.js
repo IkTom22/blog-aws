@@ -3,17 +3,75 @@ import { listPosts } from '../graphql/queries';
 import { API, graphqlOperation} from 'aws-amplify';
 import DeletePost from './DeletePost';
 import EditPost from './EditPost';
+import { onCreateComment, onCreatePost, onDeletePost, onUpdatePost } from '../graphql/subscriptions';
+import CreateCommentPost from './CreateCommentPost';
+import CommentPost from './CommentPost';
+
 
 class DisplayPosts extends Component {
 
 state = {
+    ownerId:"",
+    ownerUsername:"",
+    // errorMessage: "",
+    // postLikedBy: [],
+    // isHovering: false,
     posts: []
 }
 
     componentDidMount = async () => {
         this.getPosts()
+        this.createPostListner = API.graphql(graphqlOperation(onCreatePost))
+            .subscribe({
+                next: postData => {
+                    const  newPost = postData.value.data.onCreatePost
+                    const prevPost = this.state.posts.filter(post => post.id !== newPost.id)
+                    const updatedPosts = [newPost, ...prevPost]
+                    this.setState({ posts: updatedPosts})
+                }
+            })
+        this.deletePostListener = API.graphql(graphqlOperation(onDeletePost))    
+            .subscribe({
+                next: postData => {
+                    const deletedPost = postData.value.data.onDeletePost
+                    const updatedPosts = this.state.posts.filter(post => post.id !==deletedPost.id)
+                    this.setState({posts: updatedPosts})
+            }
+        })
+        this.updatePostListener = API.graphql(graphqlOperation(onUpdatePost))
+            .subscribe({
+                next: postData => {
+                    const {posts} = this.state
+                    const updatedPost = postData.value.data.onUpdatePost
+                    const index = posts.findIndex(post =>post.id === updatedPost.id)
+                    const updatedPosts = [
+                        ...posts.slice(0, index), 
+                        updatedPost,
+                        ...posts.slice(index + 1)
+                    ]
+                    this.setState({posts: updatedPosts})
+                }
+            })
+        this.createPostCommentListener = API.graphql(graphqlOperation(onCreateComment)) 
+            .subscribe({
+                next: commentData =>{
+                    const createdComment = commentData.value.data.onCreateComment
+                    let posts = [...this.state.posts]
+                    for (let post of posts) {
+                        if(createdComment.post.id === post.id){
+                            post.comments.items.push(createdComment)
+                        }
+                    }
+                    this.setState({posts})
+                }
+            })
     }
-
+    componentWillUnmount(){
+        this.createPostListner.unsubscribe()
+        this.deletePostListener.unsubscribe()
+        this.updatePostListener.unsubscribe()
+        this.createPostCommentListener.unsubscribe()
+    }
     getPosts = async () => {
         const result = await API.graphql(graphqlOperation(listPosts))
        this.setState({
@@ -39,8 +97,20 @@ state = {
                     </p>
                     <br/>
                     <span>
-                        <DeletePost/>
-                        <EditPost/>
+                        <DeletePost data= {post}/>
+                        <EditPost {...post} />
+                    </span>
+                    <span>
+                        <CreateCommentPost postId={post.id}/>
+                        {post.comments.items.length > 0  && <span style={{fontSize: "19px", color: "grey"}}> 
+                            Comments:
+                        </span>}
+                            {
+                                post.comments.items.map((comment, index) =><CommentPost key={index} commentData= {comment} />
+                                    
+                                
+                                 ) 
+                            }
                     </span>
                 </div>
             )
